@@ -10,6 +10,7 @@ import (
 	"hash"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +22,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/yaml"
 )
+
+var invalidMetricCharRE = regexp.MustCompile(`[^a-zA-Z0-9_:]`)
 
 // Exporter collects Oracle DB metrics. It implements prometheus.Collector.
 type Exporter struct {
@@ -438,6 +441,7 @@ func (e *Exporter) scrapeGenericValues(db *sql.DB, ch chan<- prometheus.Metric, 
 		labelsValues := []string{}
 		for _, label := range labels {
 			labelsValues = append(labelsValues, row[label])
+			level.Debug(e.logger).Log("labelValueAdded", fmt.Sprintf("%s='%s'", label, row[label]))
 		}
 		// Construct Prometheus values to sent back
 		for metric, metricHelp := range metricsDesc {
@@ -484,10 +488,13 @@ func (e *Exporter) scrapeGenericValues(db *sql.DB, ch chan<- prometheus.Metric, 
 				}
 				// If no labels, use metric name
 			} else {
+				level.Debug(e.logger).Log("constructMetricNameFieldAppend",
+					fmt.Sprintf("context='%s' suffix='%s' labels='%+v' labelsValues='%+v' metricHelp='%+v'",
+						context, cleanName(row[fieldToAppend]), labels, labelsValues, metricHelp))
 				desc := prometheus.NewDesc(
 					prometheus.BuildFQName(namespace, context, cleanName(row[fieldToAppend])),
 					metricHelp,
-					nil, nil,
+					labels, nil,
 				)
 				if metricsType[strings.ToLower(metric)] == "histogram" {
 					count, err := strconv.ParseUint(strings.TrimSpace(row["count"]), 10, 64)
@@ -512,9 +519,9 @@ func (e *Exporter) scrapeGenericValues(db *sql.DB, ch chan<- prometheus.Metric, 
 						}
 						buckets[lelimit] = counter
 					}
-					ch <- prometheus.MustNewConstHistogram(desc, count, value, buckets)
+					ch <- prometheus.MustNewConstHistogram(desc, count, value, buckets, labelsValues...)
 				} else {
-					ch <- prometheus.MustNewConstMetric(desc, getMetricType(metric, metricsType), value)
+					ch <- prometheus.MustNewConstMetric(desc, getMetricType(metric, metricsType), value, labelsValues...)
 				}
 			}
 			metricsCount++
@@ -598,13 +605,9 @@ func getMetricType(metricType string, metricsType map[string]string) prometheus.
 }
 
 func cleanName(s string) string {
-	s = strings.ReplaceAll(s, " ", "_") // Remove spaces
-	s = strings.ReplaceAll(s, "-", "_") // Remove hyphens
-	s = strings.ReplaceAll(s, "(", "")  // Remove open parenthesis
-	s = strings.ReplaceAll(s, ")", "")  // Remove close parenthesis
-	s = strings.ReplaceAll(s, "/", "")  // Remove forward slashes
-	s = strings.ReplaceAll(s, "*", "")  // Remove asterisks
 	s = strings.ToLower(s)
+	s = invalidMetricCharRE.ReplaceAllString(s, "_")
+	s = strings.TrimPrefix(s, "__")
 	return s
 }
 
