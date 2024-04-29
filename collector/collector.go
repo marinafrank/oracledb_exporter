@@ -334,9 +334,7 @@ func (e *Exporter) connect() error {
 		level.Error(e.logger).Log("error while connecting to", e.dsn)
 		return err
 	}
-	level.Debug(e.logger).Log("set max idle connections to ", e.config.MaxIdleConns)
 	db.SetMaxIdleConns(e.config.MaxIdleConns)
-	level.Debug(e.logger).Log("set max open connections to ", e.config.MaxOpenConns)
 	db.SetMaxOpenConns(e.config.MaxOpenConns)
 	level.Debug(e.logger).Log("successfully connected to: ", maskDsn(e.dsn))
 	e.db = db

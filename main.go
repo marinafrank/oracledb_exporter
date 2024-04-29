@@ -88,6 +88,11 @@ func main() {
 		QueryTimeout:       *queryTimeout,
 		DefaultMetricsFile: *defaultFileMetrics,
 	}
+
+	level.Debug(logger).Log("DATABASE_MAXIDLECONNS", config.MaxIdleConns)
+	level.Debug(logger).Log("DATABASE_MAXOPENCONNS", config.MaxOpenConns)
+	level.Debug(logger).Log("QUERY_TIMEOUT", config.QueryTimeout)
+
 	exporter, err := collector.NewExporter(logger, config)
 	if err != nil {
 		level.Error(logger).Log("unable to connect to DB", err)
