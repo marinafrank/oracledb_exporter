@@ -253,12 +253,9 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 	}(time.Now())
 
 	if err = e.db.Ping(); err != nil {
-		if strings.Contains(err.Error(), "sql: database is closed") {
-			level.Info(e.logger).Log("Reconnecting to DB")
-			err = e.connect()
-			if err != nil {
-				level.Error(e.logger).Log("error reconnecting to DB", err.Error())
-			}
+		level.Warn(e.logger).Log("lostconnection", err.Error())
+		if err = e.connect(); err != nil {
+			level.Error(e.logger).Log("error reconnecting to DB", err.Error())
 		}
 	}
 
