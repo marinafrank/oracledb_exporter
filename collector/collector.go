@@ -254,8 +254,15 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 
 	if err = e.db.Ping(); err != nil {
 		level.Warn(e.logger).Log("lostconnection", err.Error())
-		if err = e.connect(); err != nil {
-			level.Error(e.logger).Log("error reconnecting to DB", err.Error())
+		if strings.Contains(err.Error(), "sql: database is closed") ||
+			strings.Contains(err.Error(), "broken pipe") ||
+			strings.Contains(err.Error(), "i/o timeout") ||
+			strings.Contains(err.Error(), "driver: bad connection") ||
+			strings.Contains(err.Error(), "connection reset by peer") {
+			err = e.connect()
+			if err != nil {
+				level.Error(e.logger).Log("error reconnecting to DB", err.Error())
+			}
 		}
 	}
 
@@ -325,6 +332,13 @@ func (e *Exporter) scrape(ch chan<- prometheus.Metric) {
 }
 
 func (e *Exporter) connect() error {
+	if e.db != nil {
+		level.Info(e.logger).Log("reconnectExistingConnections", e.db.Stats().OpenConnections, "stats", fmt.Sprintf("%+v", e.db.Stats()))
+		if err := e.db.Close(); err != nil {
+			level.Warn(e.logger).Log("failedCloseExistingConnections", err.Error())
+		}
+
+	}
 	level.Debug(e.logger).Log("launching connection: ", maskDsn(e.dsn))
 	db, err := sql.Open("oracle", e.dsn)
 	if err != nil {
