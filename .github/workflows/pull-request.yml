@@ -180,7 +180,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix: ${{ fromJson(needs.config.outputs.deploy-pre-release-matrix) }}
-    if: ${{ !failure() && needs.release.result == 'success' && needs.config.outputs.deploy-pull-request == 'true' }}
+    if: ${{ !failure() && needs.release.result == 'success' && needs.config.outputs.deploy-pull-request == 'true' && env.FORKED == 'false' }}
     needs:
       - config
       - build
@@ -196,6 +196,7 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.REGISTRY }} -u $ --password-stdin
 
       - name: Build image
+        if: ${{ env.FORKED == 'false' }}
         id: docker-meta
         env:
           VERSION: "${{ needs.release.outputs.version }}"
